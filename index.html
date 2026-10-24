@@ -171,12 +171,27 @@ async function products(){
 }
 function renderProducts(){const q=($("pq")?.value||"").toLowerCase(),c=$("pcat")?.value||"",s=$("pstate")?.value||"";const a=productsRows.filter(p=>(!q||String(p.name).toLowerCase().includes(q)||String(p.sku||"").toLowerCase().includes(q))&&(!c||p.category===c)&&(!s||(s==="active"?p.active:!p.active)));$("productBody").innerHTML=a.map(p=>{const im=p.product_images?.sort((x,y)=>(x.sort_order||0)-(y.sort_order||0))[0]?.image_url;return '<tr><td>'+(im?'<img class="thumb" src="'+esc(im)+'">':"—")+'</td><td><b>'+esc(p.name)+'</b><br><small class="muted">'+esc(p.sku||"بدون SKU")+'</small></td><td><span class="price">'+money(p.price)+' ₪</span>'+(p.old_price?'<span class="old">'+money(p.old_price)+' ₪</span>':"")+'</td><td>'+(discount(p)?'<span class="discount">-'+discount(p)+'%</span>':"—")+'</td><td>'+catName(p.category)+'</td><td>'+esc((p.product_sizes||[]).map(x=>x.size).join("، "))+'</td><td>'+(p.active?'<span class="badge on">مفعّل</span>':'<span class="badge off">مخفي</span>')+'</td><td><div class="rowBtns"><button class="btn ghost" onclick="quickPrice(\''+p.id+'\')">السعر</button><button class="btn ghost" onclick="productForm(\''+p.id+'\')">تعديل</button><button class="btn danger" onclick="toggleProduct(\''+p.id+'\')">'+(p.active?"إخفاء":"تفعيل")+'</button><button class="btn danger" onclick="deleteProduct(\''+p.id+'\')">حذف</button></div></td></tr>'}).join("")||'<tr><td colspan="8" style="text-align:center;padding:30px">لا توجد نتائج</td></tr>'}
 
+function sizeChartToText(chart){
+ if(!chart||!Array.isArray(chart.headers)||!Array.isArray(chart.rows)||!chart.headers.length)return "";
+ return [chart.headers,...chart.rows].map(row=>row.map(cell=>String(cell??"")).join(", ")).join("\\n");
+}
+function parseSizeChartText(raw){
+ const lines=String(raw||"").split(/\\r?\\n/).map(line=>line.trim()).filter(Boolean);
+ if(lines.length<2)return {headers:[],rows:[]};
+ const parseLine=line=>line.split(",").map(cell=>cell.trim());
+ const headers=parseLine(lines[0]);
+ if(headers.length<2||headers.some(cell=>!cell))return {headers:[],rows:[]};
+ const rows=lines.slice(1).map(parseLine).filter(row=>row.some(Boolean)).map(row=>headers.map((_,i)=>row[i]||""));
+ return rows.length?{headers,rows}:{headers:[],rows:[]};
+}
+
 function productForm(id){
  window.editingProductId=id||"";
- const p=id?productsRows.find(x=>x.id===id):{name:"",category:"dresses",price:0,old_price:"",description:"",active:true,featured:false,sku:"",stock:"",tags:[],product_sizes:[],product_colors:[],product_images:[]};
+ const p=id?productsRows.find(x=>x.id===id):{name:"",category:"dresses",price:0,old_price:"",description:"",active:true,featured:false,sku:"",stock:"",tags:[],product_sizes:[],product_colors:[],product_images:[],size_chart:{headers:[],rows:[]}};
  openModal('<div class="modalHead"><h2>'+ (id?"تعديل المنتج":"إضافة منتج")+'</h2><button class="close" onclick="closeModal()">×</button></div>'+
  '<div class="grid"><div class="field"><label>اسم المنتج بالعربي</label><input id="pn" value="'+esc(p.name)+'"></div><div class="field"><label>اسم المنتج بالإنجليزي</label><input id="pnen" value="'+esc(p.name_en||"")+'" placeholder="Product name"></div><div class="field"><label>SKU اختياري</label><input id="psku" value="'+esc(p.sku||"")+'"></div><div class="field"><label>الفئة</label><select id="pc"></select></div><div class="field"><label>السعر الحالي</label><input id="pp" type="number" min="0" value="'+p.price+'"></div><div class="field"><label>السعر القديم</label><input id="po" type="number" min="0" value="'+(p.old_price??"")+'"></div><div class="field"><label>المخزون (اختياري)</label><input id="stock" type="number" min="0" value="'+(p.stock??"")+'"></div></div>'+
  '<div class="field"><label>المقاسات</label><input id="psz" value="'+esc((p.product_sizes||[]).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(x=>x.size).join(", "))+'"></div>'+
+ '<div class="field"><label>دليل المقاسات (اختياري)</label><textarea id="psizechart" rows="5" placeholder="المقاس, الصدر (سم), الخصر (سم), الطول (سم)\\nS, 88, 70, 140\\nM, 94, 76, 142\\nL, 100, 82, 144">'+esc(sizeChartToText(p.size_chart))+'</textarea><small class="muted">كل سطر مقاس، وافصل الأعمدة بفواصل. أول سطر للعناوين، مثل الصدر والخصر والطول.</small></div>'+
  '<div class="field"><label>الألوان</label><div id="colorRows"></div><button class="btn ghost" type="button" onclick="addColor()">+ لون</button></div>'+
   '<div class="field"><label>صور المنتج</label><textarea id="pimgs" placeholder="يمكنك اختيار صور من المكتبة أو رفعها من جهازك">'+esc((p.product_images||[]).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(x=>x.image_url).join("\n"))+'</textarea><div class="rowBtns" style="margin-top:8px"><button class="btn ghost" type="button" onclick="chooseMediaForProduct()">🖼️ اختيار من المكتبة</button><button class="btn gold" type="button" onclick="pickProductImage()">📤 رفع صورة من الجهاز</button></div></div>'+
  '<div class="grid"><div class="field"><label>الوصف بالعربي</label><textarea id="pdesc">'+esc(p.description||"")+'</textarea></div><div class="field"><label>الوصف بالإنجليزي</label><textarea id="pdescen">'+esc(p.description_en||"")+'</textarea></div></div>'+
@@ -187,8 +202,10 @@ function productForm(id){
 function addColor(name="",hex=""){const wrap=$("colorRows"),row=document.createElement("div");row.className="grid";row.style.marginBottom="7px";row.innerHTML='<input class="cname" placeholder="اسم اللون" value="'+esc(name)+'"><input class="chex" placeholder="#hex اختياري" value="'+esc(hex||"")+'">';wrap.appendChild(row)}
 function colorData(){return [...document.querySelectorAll("#colorRows .grid")].map((r,i)=>({name:r.querySelector(".cname").value.trim(),hex:r.querySelector(".chex").value.trim()||null,sort_order:i})).filter(x=>x.name)}
 async function saveProduct(id){
- const p={name:$("pn").value.trim(),name_en:$("pnen").value.trim()||null,sku:$("psku").value.trim()||null,category:$("pc").value,price:Number($("pp").value||0),old_price:$("po").value?Number($("po").value):null,stock:$("stock").value===""?null:Number($("stock").value),description:$("pdesc").value,description_en:$("pdescen").value.trim()||null,active:$("active").checked,featured:$("featured").checked,updated_at:new Date().toISOString()};
+ const p={name:$("pn").value.trim(),name_en:$("pnen").value.trim()||null,sku:$("psku").value.trim()||null,category:$("pc").value,price:Number($("pp").value||0),old_price:$("po").value?Number($("po").value):null,stock:$("stock").value===""?null:Number($("stock").value),description:$("pdesc").value,description_en:$("pdescen").value.trim()||null,size_chart:parseSizeChartText($("psizechart").value),active:$("active").checked,featured:$("featured").checked,updated_at:new Date().toISOString()};
  if(!p.name)return toast("اسم المنتج مطلوب.");
+ const sizeChartRaw=$("psizechart").value.trim();
+ if(sizeChartRaw&&(!p.size_chart.headers.length||!p.size_chart.rows.length))return toast("تحقّق من جدول المقاسات: اكتب العناوين في السطر الأول، ثم صفًا واحدًا على الأقل، وافصل الأعمدة بفواصل.");
  let productId=id;
  if(id){const r=await db.from("products").update(p).eq("id",id);if(r.error)return toast(r.error.message)}
  else{const r=await db.from("products").insert(p).select("id").single();if(r.error)return toast(r.error.message);productId=r.data.id}
