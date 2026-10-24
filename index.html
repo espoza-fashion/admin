@@ -21,8 +21,10 @@ input,select,textarea{width:100%;border:1px solid var(--line);border-radius:12px
 <div id="login" class="login"><div class="loginBox">
 <div class="brand">ESPOZA</div><div style="text-align:center" class="muted">لوحة الإدارة</div>
 <p class="authHint muted">بدون كلمة مرور — أدخل بريد حساب الأدمن وسنرسل لك رابط دخول آمن. لا يتم إنشاء حساب جديد.</p>
-<div class="field"><label>البريد الإلكتروني</label><input id="email" type="email" autocomplete="email" inputmode="email" placeholder="بريد حساب الأدمن"></div>
-<button class="btn primary" style="width:100%" onclick="login()">إرسال رابط الدخول</button>
+<div class="field"><label for="email">البريد الإلكتروني</label><input id="email" type="email" autocomplete="email" inputmode="email" placeholder="بريد حساب الأدمن"></div>
+<div class="field"><label for="adminPassword">كلمة السر</label><input id="adminPassword" type="password" autocomplete="current-password" placeholder="كلمة سر حساب الأدمن" onkeydown="if(event.key==='Enter')login()"></div>
+<button id="adminLoginButton" class="btn primary" style="width:100%" onclick="login()">تسجيل الدخول</button>
+<button class="btn ghost" style="width:100%;margin-top:8px" onclick="resetAdminPassword()">نسيت كلمة السر؟</button>
 <p id="loginMsg" class="muted"></p>
 </div></div>
 
@@ -75,22 +77,52 @@ function authUrlError(){
  if(code==="otp_expired"||code==="access_denied")return "رابط الدخول انتهت صلاحيته أو استُخدم سابقًا. اطلب رابطًا جديدًا.";
  return description||"تعذّر إكمال الدخول من الرابط. اطلب رابطًا جديدًا وحاول فتحه في المتصفح نفسه.";
 }
+let adminRecoveryMode=false;
+function adminRedirectUrl(){
+ const localHost=location.protocol==="file:"||location.hostname==="localhost"||location.hostname==="127.0.0.1";
+ return localHost?"https://espoza-fashion.github.io/admin/":location.origin+location.pathname;
+}
 async function login(){
- const msg=$("loginMsg"),email=$("email").value.trim();
+ const msg=$("loginMsg"),email=$("email").value.trim(),password=$("adminPassword").value,button=$("adminLoginButton");
+ if(adminRecoveryMode){
+  if(!password||password.length<8)return msg.textContent="اكتب كلمة سر جديدة من 8 أحرف على الأقل.";
+  try{
+   await initDb();
+   const r=await db.auth.updateUser({password});
+   if(r.error)throw r.error;
+   adminRecoveryMode=false;
+   $("adminPassword").value="";
+   $("adminPassword").autocomplete="current-password";
+   button.textContent="تسجيل الدخول";
+   msg.textContent="تم تغيير كلمة السر. سجّل الدخول الآن.";
+  }catch(err){msg.textContent=err.message||"تعذّر تغيير كلمة السر.";}
+  return;
+ }
  if(!email)return msg.textContent="اكتب بريد حساب الأدمن أولًا.";
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return msg.textContent="تحقّق من كتابة البريد الإلكتروني بشكل صحيح.";
- msg.textContent="جارٍ إرسال رابط الدخول…";
+ if(!password||password.length<8)return msg.textContent="اكتب كلمة السر. إذا لم تضبطها من قبل، اضغط «نسيت كلمة السر؟».";
+ msg.textContent="جارٍ تسجيل الدخول والتحقق من صلاحيات الأدمن…";
  try{
   await initDb();
-  const localHost=location.protocol==="file:"||location.hostname==="localhost"||location.hostname==="127.0.0.1";
-  const redirectTo=localHost?"https://espoza-fashion.github.io/admin/":location.origin+location.pathname;
-  const r=await db.auth.signInWithOtp({email,options:{emailRedirectTo:redirectTo,shouldCreateUser:false}});
+  const r=await db.auth.signInWithPassword({email,password});
   if(r.error)throw r.error;
-  msg.textContent="تم إرسال رابط دخول آمن إلى بريدك. افتحه لإكمال الدخول على هذا الجهاز، وتأكد من فتحه في المتصفح الذي طلبت منه الرابط.";
+  if(!(await isAdmin())){await db.auth.signOut();showLogin();msg.textContent="هذا الحساب ليس ضمن حسابات الأدمن المصرّح لها.";return;}
+  await openApp();
  }catch(err){
   const detail=String(err?.message||"");
-  msg.textContent=/redirect/i.test(detail)?"رابط العودة غير مسموح في إعدادات Supabase. أضف https://espoza-fashion.github.io/admin/ إلى Authentication > URL Configuration > Redirect URLs.":(detail||"تعذر إرسال رابط الدخول.");
+  msg.textContent=/invalid login credentials/i.test(detail)?"الإيميل أو كلمة السر غير صحيحة. إذا لم تضبط كلمة سر، استخدم «نسيت كلمة السر؟».":(detail||"تعذّر تسجيل الدخول.");
  }
+}
+async function resetAdminPassword(){
+ const email=$("email").value.trim(),msg=$("loginMsg");
+ if(!email)return msg.textContent="اكتب بريد حساب الأدمن أولًا.";
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return msg.textContent="تحقّق من كتابة البريد الإلكتروني بشكل صحيح.";
+ try{
+  await initDb();
+  const r=await db.auth.resetPasswordForEmail(email,{redirectTo:adminRedirectUrl()});
+  if(r.error)throw r.error;
+  msg.textContent="إذا كان البريد تابعًا لحساب موجود، ستصلك رسالة آمنة لتعيين كلمة سر.";
+ }catch(err){msg.textContent="تعذّر إرسال رسالة تعيين كلمة السر الآن.";}
 }
 function showLogin(){$("app").classList.add("hide");$("login").classList.remove("hide");}
 async function logout(){await db.auth.signOut();location.reload()}
@@ -119,6 +151,16 @@ async function boot(){
   const urlError=authUrlError();
   if(urlError)$("loginMsg").textContent=urlError;
   db.auth.onAuthStateChange((event,session)=>{
+   if(event==="PASSWORD_RECOVERY"){
+    window.setTimeout(()=>{
+     adminRecoveryMode=true;
+     $("adminPassword").value="";
+     $("adminPassword").autocomplete="new-password";
+     $("adminPassword").placeholder="كلمة السر الجديدة (8 أحرف على الأقل)";
+     $("adminLoginButton").textContent="حفظ كلمة السر الجديدة";
+     $("loginMsg").textContent="اختَر كلمة سر جديدة ثم اضغط حفظ.";
+    },0);
+   }
    if(event==="SIGNED_IN"&&session)window.setTimeout(()=>{validateAdminSession()},0);
   });
   await validateAdminSession();
