@@ -41,7 +41,7 @@ let db=null, currentTab="dashboard", productsRows=[], mediaRows=[], ordersRows=[
 
 const tabs=[
 ["dashboard","الرئيسية"],["products","المنتجات"],["orders","الطلبات"],["media","مكتبة الصور"],["sliders","السلايدر"],["feedback","آراء الزبائن"],["categories","الفئات"],
-["content","محتوى الموقع"],["delivery","التوصيل"],["coupons","الكوبونات"],["customers","الزبائن"],["settings","الإعدادات"]
+["content","محتوى الموقع"],["delivery","التوصيل"],["coupons","الكوبونات"],["carts","السلال المتروكة"],["customers","الزبائن"],["settings","الإعدادات"]
 ];
 
 const $=id=>document.getElementById(id);
@@ -139,7 +139,7 @@ function show(tab){currentTab=tab;renderNav();const t=tabs.find(x=>x[0]===tab);$
  if(tab==="content")$("topActions").innerHTML='<button class="btn gold" onclick="sectionForm()">+ قسم جديد</button>';
  if(tab==="delivery")$("topActions").innerHTML='<button class="btn gold" onclick="deliveryForm()">+ منطقة جديدة</button>';
  if(tab==="coupons")$("topActions").innerHTML='<button class="btn gold" onclick="couponForm()">+ كوبون</button>';
- const fn={dashboard,products,orders,media,categories,content,delivery,coupons,customers,settings}[tab];fn();
+ const fn={dashboard,products,orders,media,categories,content,delivery,coupons,carts:abandonedCarts,customers,settings}[tab];if(fn)fn();
 }
 function openModal(html){$("modalBox").innerHTML=html;$("modal").classList.remove("hide")}
 function closeModal(){$("modal").classList.add("hide")}
@@ -379,6 +379,23 @@ async function saveCoupon(id){
 async function customers(){const r=await db.from("customers").select("*").order("updated_at",{ascending:false});const a=r.data||[];$("content").innerHTML='<div class="toolbar"><input id="cq" placeholder="بحث بالاسم أو الهاتف" oninput="renderCustomers()"></div><div id="custWrap"></div>';window.customerRows=a;renderCustomers()}
 function renderCustomers(){const q=($("cq")?.value||"").toLowerCase();const a=(window.customerRows||[]).filter(x=>!q||String(x.name).toLowerCase().includes(q)||String(x.phone||"").includes(q));$("custWrap").innerHTML='<div class="tablewrap"><table class="table"><thead><tr><th>الاسم</th><th>واتساب/هاتف</th><th>الإيميل</th><th>الطلبات</th><th>إجمالي الشراء</th><th>ملاحظات</th></tr></thead><tbody>'+a.map(x=>'<tr><td><b>'+esc(x.name)+'</b></td><td>'+esc(x.phone||"—")+'</td><td>'+esc(x.email||"—")+'</td><td>'+x.total_orders+'</td><td>'+money(x.total_spend)+' ₪</td><td>'+esc(x.notes||"—")+'</td></tr>').join("")+'</tbody></table></div>'}
 
+async function abandonedCarts(){
+ const [cartResult,customerResult]=await Promise.all([
+  db.from("customer_carts").select("user_id,items,updated_at").order("updated_at",{ascending:false}).limit(200),
+  db.from("customers").select("user_id,name,email,phone").not("user_id","is",null)
+ ]);
+ if(cartResult.error){$("content").innerHTML='<div class="card">تعذّر تحميل السلال: '+esc(cartResult.error.message)+'</div>';return;}
+ const customersById=new Map((customerResult.data||[]).map(x=>[x.user_id,x]));
+ const cutoff=Date.now()-30*60*1000;
+ const carts=(cartResult.data||[]).filter(x=>Array.isArray(x.items)&&x.items.length&&new Date(x.updated_at||0).getTime()<cutoff);
+ $("content").innerHTML='<div class="card"><p class="muted">تظهر السلال المحفوظة للحسابات المسجّلة التي لم تُحدّث منذ 30 دقيقة على الأقل. لا تُرسل رسائل تلقائية دون موافقة.</p><b>عدد السلال المحتمل تركها: '+carts.length+'</b></div><div class="tablewrap"><table class="table"><thead><tr><th>الزبونة</th><th>المنتجات</th><th>قيمة السلة</th><th>آخر نشاط</th><th>التواصل</th></tr></thead><tbody>'+carts.map(row=>{
+  const customer=customersById.get(row.user_id)||{},items=row.items||[],total=items.reduce((sum,x)=>sum+Number(x.price||0)*Number(x.qty||0),0);
+  const list=items.map(x=>esc(x.name||"منتج")+" × "+Math.max(1,Number(x.qty)||1)).join("<br>");
+  const phone=String(customer.phone||"").replace(/\D/g,"");
+  const wa=phone?"https://wa.me/"+phone+"?text="+encodeURIComponent("مرحبًا، إذا احتجتِ مساعدة بخصوص المنتجات يسعدنا نساعدك من Espoza Fashion."):"";
+  return '<tr><td><b>'+esc(customer.name||"زبونة مسجلة")+'</b><br><span class="muted">'+esc(customer.email||"")+'</span></td><td>'+list+'</td><td>'+money(total)+' ₪</td><td>'+esc(row.updated_at?new Date(row.updated_at).toLocaleString("ar-PS"):"—")+'</td><td>'+(wa?'<a class="btn ghost" target="_blank" rel="noopener" href="'+wa+'">فتح واتساب</a>':'<span class="muted">لا يوجد هاتف محفوظ</span>')+'</td></tr>';
+ }).join("")+'</tbody></table></div>';
+}
 async function settings(){const r=await db.from("store_settings").select("*").order("key");settingsRows=r.data||[];$("content").innerHTML='<div class="grid">'+settingsRows.map(x=>'<div class="card"><div class="field"><label>'+esc(x.key)+'</label><textarea id="set_'+x.id+'">'+esc(typeof x.value==="object"?JSON.stringify(x.value,null,2):x.value)+'</textarea></div><button class="btn gold" onclick="saveSetting(\''+x.id+'\')">حفظ</button></div>').join("")+'</div>'}
 async function saveSetting(id){const row=settingsRows.find(x=>x.id===id);let value=$("set_"+id).value;try{value=JSON.parse(value)}catch(e){}const r=await db.from("store_settings").update({value,updated_at:new Date().toISOString()}).eq("id",id);if(r.error)return toast(r.error.message);toast("تم حفظ الإعداد.");settings()}
 
