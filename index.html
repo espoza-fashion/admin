@@ -371,6 +371,8 @@ async function saveCoupon(id){
  if(type==="percent"&&(value<0||value>100))return toast("النسبة يجب أن تكون بين 0 و100.");
  const p={code:$("ccode").value.trim().toUpperCase(),discount_type:type,discount_value:value,min_order:Math.max(0,Number($("cmin").value||0)),min_quantity:Math.max(1,Math.floor(Number($("cqty").value||1))),usage_limit:$("climit").value?Math.max(1,Math.floor(Number($("climit").value))):null,auto_apply:$("cauto").checked,first_order_only:$("cfirst").checked,active:$("cact").checked,updated_at:new Date().toISOString()};
  if(!p.code)return toast("اكتب اسم العرض أو كوده.");
+ if(p.auto_apply&&p.usage_limit!=null)return toast("حد الاستخدام الإجمالي غير مدعوم للعروض التلقائية حاليًا؛ اتركه فارغًا.");
+ if(p.first_order_only&&!p.auto_apply)return toast("عرض أول طلب يجب أن يكون مفعّلًا كتطبيق تلقائي.");
  const r=id?await db.from("coupons").update(p).eq("id",id):await db.from("coupons").insert(p);
  if(r.error)return toast(r.error.message);
  closeModal();toast("تم حفظ العرض.");coupons();
