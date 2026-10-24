@@ -58,38 +58,69 @@ async function initDb(){
 }
 async function isAdmin(){
  const s=await db.auth.getSession();
+ if(s.error)throw s.error;
  if(!s.data.session)return false;
  const r=await db.rpc("is_current_user_admin");
  if(r.error)throw r.error;
  return r.data===true;
 }
+function authUrlError(){
+ const q=new URLSearchParams(location.search);
+ const h=new URLSearchParams(location.hash.replace(/^#/,""));
+ const code=q.get("error_code")||h.get("error_code")||q.get("error")||h.get("error");
+ const description=q.get("error_description")||h.get("error_description");
+ if(!code&&!description)return "";
+ history.replaceState({},document.title,location.pathname);
+ if(code==="otp_expired"||code==="access_denied")return "رابط الدخول انتهت صلاحيته أو استُخدم سابقًا. اطلب رابطًا جديدًا.";
+ return description||"تعذّر إكمال الدخول من الرابط. اطلب رابطًا جديدًا وحاول فتحه في المتصفح نفسه.";
+}
 async function login(){
  const msg=$("loginMsg"),email=$("email").value.trim();
  if(!email)return msg.textContent="اكتب بريد حساب الأدمن أولًا.";
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return msg.textContent="تحقّق من كتابة البريد الإلكتروني بشكل صحيح.";
  msg.textContent="جارٍ إرسال رابط الدخول…";
  try{
   await initDb();
-  const r=await db.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname,shouldCreateUser:false}});
+  const redirectTo=location.origin+location.pathname;
+  const r=await db.auth.signInWithOtp({email,options:{emailRedirectTo:redirectTo,shouldCreateUser:false}});
   if(r.error)throw r.error;
-  msg.textContent="تم إرسال رابط دخول آمن إلى بريدك. افتحه للمتابعة.";
+  msg.textContent="تم إرسال رابط دخول آمن إلى بريدك. افتحه لإكمال الدخول على هذا الجهاز، وتأكد من فتحه في المتصفح الذي طلبت منه الرابط.";
  }catch(err){msg.textContent=err.message||"تعذر إرسال رابط الدخول."}
 }
-function showLogin(){$("app").classList.add("hide");$("login").classList.remove("hide");$("loginMsg").textContent="";}
+function showLogin(){$("app").classList.add("hide");$("login").classList.remove("hide");}
 async function logout(){await db.auth.signOut();location.reload()}
 async function openApp(){$("login").classList.add("hide");$("app").classList.remove("hide");renderNav();show("dashboard")}
+let authValidationInFlight=false;
+async function validateAdminSession(){
+ if(authValidationInFlight)return;
+ authValidationInFlight=true;
+ try{
+  const s=await db.auth.getSession();
+  if(s.error)throw s.error;
+  if(!s.data.session)return;
+  if(await isAdmin()){await openApp();return;}
+  await db.auth.signOut();
+  showLogin();
+  $("loginMsg").textContent="تم التحقق من البريد، لكن هذا الحساب ليس ضمن حسابات الأدمن المصرّح لها.";
+ }catch(err){
+  console.warn("Auth validation failed:",err);
+  showLogin();
+  $("loginMsg").textContent="وصل رابط الدخول، لكن تعذّر التحقق من الجلسة. اطلب رابطًا جديدًا وتأكد من فتحه في المتصفح نفسه.";
+ }finally{authValidationInFlight=false;}
+}
 async function boot(){
  try{
   await initDb();
-  db.auth.onAuthStateChange(async(event)=>{
-   if(event==="SIGNED_IN"){
-    try{
-     if(await isAdmin())openApp();
-     else{await db.auth.signOut();showLogin();$("loginMsg").textContent="هذا الحساب ليس ضمن حسابات الأدمن.";}
-    }catch(err){console.warn(err);}
-   }
+  const urlError=authUrlError();
+  if(urlError)$("loginMsg").textContent=urlError;
+  db.auth.onAuthStateChange((event,session)=>{
+   if(event==="SIGNED_IN"&&session)window.setTimeout(()=>{validateAdminSession()},0);
   });
-  if(await isAdmin())openApp();
- }catch(err){console.warn(err);}
+  await validateAdminSession();
+ }catch(err){
+  console.warn("Admin startup failed:",err);
+  $("loginMsg").textContent="تعذّر الاتصال بخدمة الدخول. حدّث الصفحة وحاول مرة أخرى.";
+ }
 }
 function renderNav(){
  const h=tabs.map(t=>'<button class="'+(currentTab===t[0]?"active":"")+'" onclick="show(\''+t[0]+'\')">'+t[1]+"</button>").join("");
