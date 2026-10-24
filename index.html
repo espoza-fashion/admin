@@ -48,6 +48,7 @@ const $=id=>document.getElementById(id);
 const esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function toast(msg){$("toast").textContent=msg;$("toast").classList.remove("hide");clearTimeout(window._toast);window._toast=setTimeout(()=>$("toast").classList.add("hide"),2500)}
 function money(v){return Number(v||0).toLocaleString("en-US",{maximumFractionDigits:2})}
+function toLocalDateTimeInput(value){if(!value)return "";const d=new Date(value);if(Number.isNaN(d.getTime()))return "";return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)}
 function discount(p){if(!p.old_price||Number(p.old_price)<=Number(p.price))return 0;return Math.round((1-Number(p.price)/Number(p.old_price))*100)}
 function catName(c){return c==="sets"?"أطقم":c==="offers"?"عروضات":c==="dresses"?"فساتين":c||"—"}
 
@@ -380,8 +381,8 @@ async function couponForm(id){
  '<div class="field"><label>حد الاستخدام الإجمالي (اختياري)</label><input id="climit" type="number" min="1" value="'+(x.usage_limit??"")+'"></div>'+
  '<div class="field"><label>الفئات المستهدفة (اختياري)</label><select id="ccats" multiple size="5" style="min-height:120px">'+categoryOptions+'</select><small class="muted">اتركيها فارغة لتطبيق العرض على كل الفئات. اختاري أكثر من فئة بالضغط المطوّل أو Ctrl/Command.</small></div>'+
  '<div class="field"><label>المنتجات المستهدفة (اختياري)</label><select id="cproducts" multiple size="5" style="min-height:120px">'+productOptions+'</select><small class="muted">اتركيها فارغة لتطبيق العرض على كل المنتجات. اختيار المنتجات يحدّد العرض لهذه الموديلات فقط.</small></div>'+
- '<div class="field"><label>يبدأ العرض (اختياري)</label><input id="cstarts" type="datetime-local" value="'+(x.starts_at?new Date(x.starts_at).toISOString().slice(0,16):"")+'"></div>'+
- '<div class="field"><label>ينتهي العرض (اختياري)</label><input id="cends" type="datetime-local" value="'+(x.ends_at?new Date(x.ends_at).toISOString().slice(0,16):"")+'"></div></div>'+
+ '<div class="field"><label>يبدأ العرض (اختياري)</label><input id="cstarts" type="datetime-local" value="'+toLocalDateTimeInput(x.starts_at)+'"></div>'+
+ '<div class="field"><label>ينتهي العرض (اختياري)</label><input id="cends" type="datetime-local" value="'+toLocalDateTimeInput(x.ends_at)+'"></div></div>'+
  '<div style="display:grid;gap:10px;margin:10px 0"><label><input id="cauto" type="checkbox" '+(x.auto_apply?"checked":"")+'> تطبيق تلقائي عند تحقق الشروط</label>'+
  '<label><input id="cfirst" type="checkbox" '+(x.first_order_only?"checked":"")+'> للزبونة التي لم يسبق لها الطلب (يتطلب تسجيل الدخول)</label>'+
  '<label><input id="cact" type="checkbox" '+(x.active?"checked":"")+'> العرض فعّال</label></div>'+
