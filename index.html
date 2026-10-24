@@ -173,10 +173,10 @@ function renderProducts(){const q=($("pq")?.value||"").toLowerCase(),c=$("pcat")
 
 function sizeChartToText(chart){
  if(!chart||!Array.isArray(chart.headers)||!Array.isArray(chart.rows)||!chart.headers.length)return "";
- return [chart.headers,...chart.rows].map(row=>row.map(cell=>String(cell??"")).join(", ")).join("\\n");
+ return [chart.headers,...chart.rows].map(row=>row.map(cell=>String(cell??"")).join(", ")).join("\n");
 }
 function parseSizeChartText(raw){
- const lines=String(raw||"").split(/\\r?\\n/).map(line=>line.trim()).filter(Boolean);
+ const lines=String(raw||"").split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
  if(lines.length<2)return {headers:[],rows:[]};
  const parseLine=line=>line.split(",").map(cell=>cell.trim());
  const headers=parseLine(lines[0]);
@@ -191,7 +191,7 @@ function productForm(id){
  openModal('<div class="modalHead"><h2>'+ (id?"تعديل المنتج":"إضافة منتج")+'</h2><button class="close" onclick="closeModal()">×</button></div>'+
  '<div class="grid"><div class="field"><label>اسم المنتج بالعربي</label><input id="pn" value="'+esc(p.name)+'"></div><div class="field"><label>اسم المنتج بالإنجليزي</label><input id="pnen" value="'+esc(p.name_en||"")+'" placeholder="Product name"></div><div class="field"><label>SKU اختياري</label><input id="psku" value="'+esc(p.sku||"")+'"></div><div class="field"><label>الفئة</label><select id="pc"></select></div><div class="field"><label>السعر الحالي</label><input id="pp" type="number" min="0" value="'+p.price+'"></div><div class="field"><label>السعر القديم</label><input id="po" type="number" min="0" value="'+(p.old_price??"")+'"></div><div class="field"><label>المخزون (اختياري)</label><input id="stock" type="number" min="0" value="'+(p.stock??"")+'"></div></div>'+
  '<div class="field"><label>المقاسات</label><input id="psz" value="'+esc((p.product_sizes||[]).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(x=>x.size).join(", "))+'"></div>'+
- '<div class="field"><label>دليل المقاسات (اختياري)</label><textarea id="psizechart" rows="5" placeholder="المقاس, الصدر (سم), الخصر (سم), الطول (سم)\\nS, 88, 70, 140\\nM, 94, 76, 142\\nL, 100, 82, 144">'+esc(sizeChartToText(p.size_chart))+'</textarea><small class="muted">كل سطر مقاس، وافصل الأعمدة بفواصل. أول سطر للعناوين، مثل الصدر والخصر والطول.</small></div>'+
+ '<div class="field"><label>دليل المقاسات (اختياري)</label><textarea id="psizechart" rows="5" placeholder="المقاس, الصدر (سم), الخصر (سم), الطول (سم)\nS, 88, 70, 140\nM, 94, 76, 142\nL, 100, 82, 144">'+esc(sizeChartToText(p.size_chart))+'</textarea><small class="muted">كل سطر مقاس، وافصل الأعمدة بفواصل. أول سطر للعناوين، مثل الصدر والخصر والطول.</small></div>'+
  '<div class="field"><label>الألوان</label><div id="colorRows"></div><button class="btn ghost" type="button" onclick="addColor()">+ لون</button></div>'+
   '<div class="field"><label>صور المنتج</label><textarea id="pimgs" placeholder="يمكنك اختيار صور من المكتبة أو رفعها من جهازك">'+esc((p.product_images||[]).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(x=>x.image_url).join("\n"))+'</textarea><div class="rowBtns" style="margin-top:8px"><button class="btn ghost" type="button" onclick="chooseMediaForProduct()">🖼️ اختيار من المكتبة</button><button class="btn gold" type="button" onclick="pickProductImage()">📤 رفع صورة من الجهاز</button></div></div>'+
  '<div class="grid"><div class="field"><label>الوصف بالعربي</label><textarea id="pdesc">'+esc(p.description||"")+'</textarea></div><div class="field"><label>الوصف بالإنجليزي</label><textarea id="pdescen">'+esc(p.description_en||"")+'</textarea></div></div>'+
