@@ -81,11 +81,15 @@ async function login(){
  msg.textContent="جارٍ إرسال رابط الدخول…";
  try{
   await initDb();
-  const redirectTo=location.origin+location.pathname;
+  const localHost=location.protocol==="file:"||location.hostname==="localhost"||location.hostname==="127.0.0.1";
+  const redirectTo=localHost?"https://espoza-fashion.github.io/admin/":location.origin+location.pathname;
   const r=await db.auth.signInWithOtp({email,options:{emailRedirectTo:redirectTo,shouldCreateUser:false}});
   if(r.error)throw r.error;
   msg.textContent="تم إرسال رابط دخول آمن إلى بريدك. افتحه لإكمال الدخول على هذا الجهاز، وتأكد من فتحه في المتصفح الذي طلبت منه الرابط.";
- }catch(err){msg.textContent=err.message||"تعذر إرسال رابط الدخول."}
+ }catch(err){
+  const detail=String(err?.message||"");
+  msg.textContent=/redirect/i.test(detail)?"رابط العودة غير مسموح في إعدادات Supabase. أضف https://espoza-fashion.github.io/admin/ إلى Authentication > URL Configuration > Redirect URLs.":(detail||"تعذر إرسال رابط الدخول.");
+ }
 }
 function showLogin(){$("app").classList.add("hide");$("login").classList.remove("hide");}
 async function logout(){await db.auth.signOut();location.reload()}
